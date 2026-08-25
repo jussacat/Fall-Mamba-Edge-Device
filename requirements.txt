@@ -1,0 +1,15 @@
+einops==0.7.0
+numpy==1.26.4
+omegaconf==2.3.0
+opencv_python==4.8.1.78
+pandas==2.2.1
+Pillow==10.1.0
+scipy==1.12.0
+scikit-image
+tensorboardX==2.6.2.2
+timm==0.4.12
+tqdm==4.66.1
+transformers==4.36.1
+wandb==0.16.2
+PyYAML==6.0.1
+mamba-minimal

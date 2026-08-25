@@ -1,0 +1,17 @@
+__pycache__/
+*.pyc
+
+venv/
+.env
+
+build/
+dist/
+
+*.pth
+*.pt
+*.ckpt
+
+dataset/
+data/
+
+.DS_Store
