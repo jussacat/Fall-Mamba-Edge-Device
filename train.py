@@ -5,10 +5,10 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 
-# Import các module từ dự án của bạn
+
 from configs.tiny_config import TinyConfig
 from dataset.le2i_dataset import Le2iDataset
-from dataset.transform import get_transform
+from dataset.transform import get_transforms
 from model.fall_mamba import FallMamba
 from utils.metrics import FallMetrics
 from utils.logger import setup_logger
@@ -40,9 +40,9 @@ def get_video_paths_and_labels(data_dir):
 
 def main():
     # 1. Cấu hình tham số dòng lệnh (Command Line Arguments)
-    parser = argparse.ArgumentParser(description="Huấn luyện Fall-Mamba")
-    parser.add_argument('--data_path', type=str, required=True, help="Đường dẫn tới thư mục dataset")
-    parser.add_argument('--save_path', type=str, default='./working', help="Đường dẫn lưu model và log")
+    parser = argparse.ArgumentParser(description="Training Fall-Mamba")
+    parser.add_argument('--data_path', type=str, required=True, help="Path to dataset")
+    parser.add_argument('--save_path', type=str, default='./working', help="Path saving model and log")
     args = parser.parse_args()
 
     os.makedirs(args.save_path, exist_ok=True)
@@ -50,14 +50,14 @@ def main():
     # Khởi tạo Logger và đọc Config
     logger = setup_logger(os.path.join(args.save_path, "train.log"))
     cfg = TinyConfig()
-    logger.info("Bắt đầu quá trình thiết lập huấn luyện Fall-Mamba...")
+    logger.info("Start training Fall-Mamba...")
 
     # Thiết lập thiết bị (GPU nếu có, ngược lại dùng CPU)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    logger.info(f"Đang sử dụng thiết bị: {device}")
+    logger.info(f"Device used: {device}")
 
     # 2. Chuẩn bị Dữ liệu
-    logger.info(f"Đang quét dữ liệu từ: {args.data_path}")
+    logger.info(f"Scanning data from: {args.data_path}")
     all_paths, all_labels = get_video_paths_and_labels(args.data_path)
     
     # Chia dữ liệu cơ bản (80% Train, 20% Val)
@@ -65,7 +65,7 @@ def main():
     train_paths, val_paths = all_paths[:split_idx], all_paths[split_idx:]
     train_labels, val_labels = all_labels[:split_idx], all_labels[split_idx:]
     
-    logger.info(f"Tổng số video: Train={len(train_paths)}, Val={len(val_paths)}")
+    logger.info(f"Total videos: Train={len(train_paths)}, Val={len(val_paths)}")
 
     train_dataset = Le2iDataset(train_paths, train_labels, num_frames=cfg.num_frames, transform=get_transforms(is_train=True))
     val_dataset = Le2iDataset(val_paths, val_labels, num_frames=cfg.num_frames, transform=get_transforms(is_train=False))
@@ -139,7 +139,7 @@ def main():
             torch.save(model.state_dict(), save_path)
             logger.info(f"--> Đã lưu mô hình tốt nhất tại F1-Score: {best_f1:.4f}")
 
-    logger.info("Huấn luyện hoàn tất!")
+    logger.info("Training successful!")
 
 if __name__ == "__main__":
     main()

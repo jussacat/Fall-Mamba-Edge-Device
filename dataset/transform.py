@@ -1,7 +1,7 @@
 import torch
 from torchvision import transforms
 
-def get_transform(is_train=True):
+def get_transforms(is_train=True):
     base_transforms = [
         transforms.ToPILImage(),
         transforms.Resize((224, 224)), #Resnet input size
