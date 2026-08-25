@@ -6,8 +6,6 @@ from torch import Tensor
 from functools import partial
 from timm.models.layers import DropPath
 import torch.utils.checkpoint as checkpoint
-
-# Import động cơ Mamba thuần PyTorch
 from .mamba_minimal import MambaBlock, ModelArgs, RMSNorm
 
 class MultiHeadTemporalAttention(nn.Module):
@@ -43,7 +41,6 @@ class MultiHeadTemporalAttention(nn.Module):
     def forward(self, x, seq_len=None):
         batch_size, seq_len, _ = x.size()
 
-        # 加入时间位置编码
         time_pos_encoding = self.time_pos_encoding[:, :seq_len, :].to(x.device)
         x = x + time_pos_encoding
 

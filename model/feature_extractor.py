@@ -6,14 +6,14 @@ from timm.models.layers import to_2tuple
 class VideoFeatureExtractor(nn.Module):
     def __init__(self, embed_dim):
         super(VideoFeatureExtractor, self).__init__()
-        resnet = models.resnet50(pretrained=True)
-        self.feature_extractor = nn.Sequential(*list(resnet.children())[:-2])  # 保持空间维度
-        self.pool = nn.AdaptiveAvgPool2d((1, 1))  # 添加全局平均池化层
+        resnet = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
+        self.feature_extractor = nn.Sequential(*list(resnet.children())[:-2])  
+        self.pool = nn.AdaptiveAvgPool2d((1, 1)) 
         self.fc = nn.Linear(resnet.fc.in_features, embed_dim)
 
     def forward(self, x):
         x = self.feature_extractor(x)
-        x = self.pool(x)  # 通过池化层
+        x = self.pool(x) 
         x = torch.flatten(x, 1)
         x = self.fc(x)
         return x

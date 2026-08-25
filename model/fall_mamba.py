@@ -86,7 +86,7 @@ class FallMamba(nn.Module):
 
     def forward_features(self, video):
         # Tinh gọn hoàn toàn, chỉ giữ lại Video!
-        B, C, T, H, W = video.shape
+        B, T, C, H, W = video.shape
         video = video.view(B * T, C, H, W)
             
         video_features = self.video_feature_extractor(video)
