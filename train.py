@@ -5,6 +5,8 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
+from tqdm import tqdm
+import time
 
 
 from configs.tiny_config import TinyConfig
@@ -95,8 +97,18 @@ def main():
         model.train()
         metrics.reset()
         train_loss = 0.0
+
+        total_train_samples = len(train_loader.dataset)
+        processed_samples = 0
+
+        pbar = tqdm(
+            train_loader, 
+            desc=f"Epoch [{epoch+1}/{cfg.epochs}] Training", 
+            total=len(train_loader),
+            leave=False
+        )
         
-        for batch_idx, (videos, labels) in enumerate(train_loader):
+        for batch_idx, (videos, labels) in enumerate(tqdm(train_loader, desc=f"Epoch {epoch+1}/{cfg.epochs}")):
             videos, labels = videos.to(device), labels.to(device, dtype=torch.long)
             
             optimizer.zero_grad()
@@ -108,6 +120,13 @@ def main():
             
             train_loss += loss.item()
             metrics.update(outputs, labels)
+
+            processed_samples += videos.size(0)
+
+            pbar.set_postfix({
+                'Processed': f"{processed_samples}/{total_train_samples} videos",
+                'Loss': f"{loss.item():.4f}"
+            })
             
         train_stats = metrics.compute()
         avg_train_loss = train_loss / len(train_loader)
