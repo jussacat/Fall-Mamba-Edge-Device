@@ -25,6 +25,8 @@ class Le2iDataset(Dataset):
         Hàm dùng OpenCV để đọc video và lấy ra đúng số lượng num_frames một cách đều đặn.
         """
         cap = cv2.VideoCapture(video_path)
+
+        cap.set(cv2.CAP_PROP_AUDIO_STREAM, -1)
         frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         
         # Nếu video quá ngắn hoặc bị lỗi, tạo mảng đen (zero padding)
