@@ -34,21 +34,28 @@ class Le2iDataset(Dataset):
             return [np.zeros((224, 224, 3), dtype=np.uint8) for _ in range(self.num_frames)]
 
         # Tính toán các chỉ số (index) của khung hình cần lấy sao cho rải đều khắp video
-        indices = np.linspace(0, frame_count - 1, self.num_frames, dtype=int)
-        
+        target_indices = set(np.linspace(0, frame_count - 1, self.num_frames, dtype=int))
         frames = []
-        for idx in indices:
-            cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
+
+        
+        
+        curr_idx = 0
+        while cap.isOpened() and len(frames) < self.num_frames:
             success, frame = cap.read()
-            if success:
-                # OpenCV đọc ảnh theo hệ màu BGR, cần chuyển sang RGB cho PyTorch
+            if not success:
+                break
+                
+            if curr_idx in target_indices:
+                # Resize trực tiếp bằng OpenCV trước khi chuyển đổi hệ màu để tiết kiệm RAM
+                frame = cv2.resize(frame, (224, 224))
                 frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 frames.append(frame)
-            else:
-                # Fallback nếu lỗi đọc frame
-                frames.append(np.zeros((224, 224, 3), dtype=np.uint8))
                 
+            curr_idx += 1
+            
         cap.release()
+        while len(frames) < self.num_frames:
+            frames.append(np.zeros((224, 224, 3), dtype=np.uint8))
         return frames
 
     def __getitem__(self, idx):
