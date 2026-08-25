@@ -12,4 +12,3 @@ tqdm==4.66.1
 transformers==4.36.1
 wandb==0.16.2
 PyYAML==6.0.1
-mamba-minimal
