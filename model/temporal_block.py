@@ -142,7 +142,7 @@ def create_block(d_model, ssm_cfg=None, norm_epsilon=1e-5, drop_path=0.,
         n_layer=1, vocab_size=1 
     )
     
-    mixer_cls = partial(MambaBlock, args=args)
+    mixer_cls = lambda d: MambaBlock(args)
     norm_cls = partial(nn.LayerNorm if not rms_norm else RMSNorm, eps=norm_epsilon)
     
     block = Block(
