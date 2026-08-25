@@ -87,34 +87,24 @@ class Block(nn.Module):
             hidden_states = temp_output + residual
             hidden_states = self.mlp(hidden_states)
 
-        if not self.fused_add_norm:
-            residual = (residual + self.drop_path(hidden_states)) if residual is not None else hidden_states
-            hidden_states = self.norm(residual.to(dtype=self.norm.weight.dtype))
-            if self.residual_in_fp32:
-                residual = residual.to(torch.float32)
+        # Tiền chuẩn hóa trước khi vào Mixer
+        residual = (residual + self.drop_path(hidden_states)) if residual is not None else hidden_states
+        hidden_states = self.norm(residual.to(dtype=self.norm.weight.dtype))
+        if self.residual_in_fp32:
+            residual = residual.to(torch.float32)
 
+        # Chạy qua MambaBlock
         if use_checkpoint:
             hidden_states = checkpoint.checkpoint(self.mixer, hidden_states)
         else:
             hidden_states = self.mixer(hidden_states)
 
+        # Chuẩn hóa đầu ra
         if not self.apply_temporal_attention:
-            if not self.fused_add_norm:
-                residual = (residual + self.drop_path(hidden_states)) if residual is not None else hidden_states
-                hidden_states = self.norm(residual.to(dtype=self.norm.weight.dtype))
-                if self.residual_in_fp32:
-                    residual = residual.to(torch.float32)
-            else:
-                fused_add_norm_fn = rms_norm_fn if isinstance(self.norm, RMSNorm) else layer_norm_fn
-                hidden_states, residual = fused_add_norm_fn(
-                    hidden_states if residual is None else self.drop_path(hidden_states),
-                    self.norm.weight,
-                    self.norm.bias,
-                    residual=residual,
-                    prenorm=True,
-                    residual_in_fp32=self.residual_in_fp32,
-                    eps=self.norm.eps,
-                )
+            residual = (residual + self.drop_path(hidden_states)) if residual is not None else hidden_states
+            hidden_states = self.norm(residual.to(dtype=self.norm.weight.dtype))
+            if self.residual_in_fp32:
+                residual = residual.to(torch.float32)
 
         return hidden_states, residual
 
