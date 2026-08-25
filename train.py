@@ -8,7 +8,7 @@ from torch.utils.data import DataLoader
 # Import các module từ dự án của bạn
 from configs.tiny_config import TinyConfig
 from dataset.le2i_dataset import Le2iDataset
-from dataset.transforms import get_transforms
+from dataset.transform import get_transform
 from model.fall_mamba import FallMamba
 from utils.metrics import FallMetrics
 from utils.logger import setup_logger
