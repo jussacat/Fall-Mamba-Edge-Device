@@ -77,8 +77,20 @@ def main():
     train_dataset = Le2iDataset(train_paths, train_labels, num_frames=cfg.num_frames, transform=get_transforms(is_train=True))
     val_dataset = Le2iDataset(val_paths, val_labels, num_frames=cfg.num_frames, transform=get_transforms(is_train=False))
 
-    train_loader = DataLoader(train_dataset, batch_size=cfg.batch_size, shuffle=True, num_workers=cfg.num_workers)
-    val_loader = DataLoader(val_dataset, batch_size=cfg.batch_size, shuffle=False, num_workers=cfg.num_workers)
+    train_loader = DataLoader(
+        train_dataset, 
+        batch_size=cfg.batch_size, 
+        shuffle=True, 
+        num_workers=0,      # Đặt về 0 để tránh nghẽn luồng CPU
+        pin_memory=True
+    )
+    val_loader = DataLoader(
+        val_dataset, 
+        batch_size=cfg.batch_size, 
+        shuffle=False, 
+        num_workers=0,
+        pin_memory=True
+    )
 
     # 3. Khởi tạo Mô hình, Loss và Optimizer
     model = FallMamba(
