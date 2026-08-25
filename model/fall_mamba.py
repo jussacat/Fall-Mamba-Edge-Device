@@ -85,45 +85,45 @@ class FallMamba(nn.Module):
         trunc_normal_(self.pos_embed, std=.02)
 
     def forward_features(self, video):
-            # Tinh gọn hoàn toàn, chỉ giữ lại Video!
-            B, C, T, H, W = video.shape
-            video = video.view(B * T, C, H, W)
+        # Tinh gọn hoàn toàn, chỉ giữ lại Video!
+        B, C, T, H, W = video.shape
+        video = video.view(B * T, C, H, W)
             
-            video_features = self.video_feature_extractor(video)
-            video_features = video_features.view(B, T, self.embed_dim).permute(0, 2, 1)
-            video_features = video_features.unsqueeze(2).unsqueeze(2)
-            video_features = video_features.expand(-1, -1, H, W, -1)
-            video_features = video_features.permute(0, 1, 4, 2, 3)
+        video_features = self.video_feature_extractor(video)
+        video_features = video_features.view(B, T, self.embed_dim).permute(0, 2, 1)
+        video_features = video_features.unsqueeze(2).unsqueeze(2)
+        video_features = video_features.expand(-1, -1, H, W, -1)
+        video_features = video_features.permute(0, 1, 4, 2, 3)
             
-            if video_features.shape[1] > 3:
-                video_features = video_features[:, :3, :, :, :]
+        if video_features.shape[1] > 3:
+            video_features = video_features[:, :3, :, :, :]
                 
-            x = self.patch_embed(video_features)
+        x = self.patch_embed(video_features)
             
-            B, C, T, H, W = x.shape
-            x = x.permute(0, 2, 3, 4, 1).reshape(B * T, H * W, C)
+        B, C, T, H, W = x.shape
+        x = x.permute(0, 2, 3, 4, 1).reshape(B * T, H * W, C)
 
-            cls_token = self.cls_token.expand(x.shape[0], -1, -1)
-            x = torch.cat((x[:, :x.size(1) // 2, :], cls_token, x[:, x.size(1) // 2:, :]), dim=1)
-            x = x + self.pos_embed
+        cls_token = self.cls_token.expand(x.shape[0], -1, -1)
+        x = torch.cat((x[:, :x.size(1) // 2, :], cls_token, x[:, x.size(1) // 2:, :]), dim=1)
+        x = x + self.pos_embed
 
-            cls_tokens = x[:B, :1, :]
-            x = x[:, 1:]
-            x = rearrange(x, '(b t) n m -> (b n) t m', b=B, t=T)
-            x = x + self.temporal_pos_embedding[:, :T, :]
-            x = rearrange(x, '(b n) t m -> b (t n) m', b=B, t=T)
-            x = torch.cat((cls_tokens, x), dim=1)
+        cls_tokens = x[:B, :1, :]
+        x = x[:, 1:]
+        x = rearrange(x, '(b t) n m -> (b n) t m', b=B, t=T)
+        x = x + self.temporal_pos_embedding[:, :T, :]
+        x = rearrange(x, '(b n) t m -> b (t n) m', b=B, t=T)
+        x = torch.cat((cls_tokens, x), dim=1)
 
-            x = self.pos_drop(x)
+        x = self.pos_drop(x)
             
-            # Đi qua các khối Mamba
-            for layer in self.layers:
-                x, _ = layer(x)
+        # Đi qua các khối Mamba
+        for layer in self.layers:
+            x, _ = layer(x)
 
-            x = self.norm_f(x)
-            return x[:, 0, :] # Lấy output của CLS token để phân loại
+        x = self.norm_f(x)
+        return x[:, 0, :] # Lấy output của CLS token để phân loại
 
-        def forward(self, video):
-            x = self.forward_features(video)
-            x = self.head(self.head_drop(x))
-            return x
+    def forward(self, video):
+        x = self.forward_features(video)
+        x = self.head(self.head_drop(x))
+        return x
