@@ -94,9 +94,9 @@ class Block(nn.Module):
                 residual = residual.to(torch.float32)
 
         if use_checkpoint:
-            hidden_states = checkpoint.checkpoint(self.mixer, hidden_states, inference_params)
+            hidden_states = checkpoint.checkpoint(self.mixer, hidden_states)
         else:
-            hidden_states = self.mixer(hidden_states, inference_params=inference_params)
+            hidden_states = self.mixer(hidden_states)
 
         if not self.apply_temporal_attention:
             if not self.fused_add_norm:

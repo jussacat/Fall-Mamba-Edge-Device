@@ -85,7 +85,7 @@ class FallMamba(nn.Module):
         trunc_normal_(self.pos_embed, std=.02)
 
     def forward_features(self, video):
-        # Tinh gọn hoàn toàn, chỉ giữ lại Video!
+
         B, T, C, H, W = video.shape
         video = video.view(B * T, C, H, W)
             
@@ -116,12 +116,11 @@ class FallMamba(nn.Module):
 
         x = self.pos_drop(x)
             
-        # Đi qua các khối Mamba
         for layer in self.layers:
             x, _ = layer(x)
 
         x = self.norm_f(x)
-        return x[:, 0, :] # Lấy output của CLS token để phân loại
+        return x[:, 0, :]
 
     def forward(self, video):
         x = self.forward_features(video)

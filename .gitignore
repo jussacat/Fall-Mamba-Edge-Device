@@ -11,6 +11,5 @@ dist/
 *.pt
 *.ckpt
 
-data/
 
 .DS_Store

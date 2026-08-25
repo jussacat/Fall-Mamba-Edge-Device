@@ -89,7 +89,7 @@ def main():
     best_f1 = 0.0
 
     # 4. Vòng lặp Huấn luyện (Training Loop)
-    logger.info("Bắt đầu huấn luyện...")
+    logger.info("Start training process...")
     for epoch in range(cfg.epochs):
         model.train()
         metrics.reset()
@@ -137,7 +137,7 @@ def main():
             best_f1 = val_stats['f1_score']
             save_path = os.path.join(args.save_path, "best_fall_mamba.pth")
             torch.save(model.state_dict(), save_path)
-            logger.info(f"--> Đã lưu mô hình tốt nhất tại F1-Score: {best_f1:.4f}")
+            logger.info(f"--> Best model saved at F1-Score: {best_f1:.4f}")
 
     logger.info("Training successful!")
 
