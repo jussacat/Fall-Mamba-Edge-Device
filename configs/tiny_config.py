@@ -10,9 +10,9 @@ class TinyConfig:
     num_classes = 2         # 2 lớp: 1 (Té ngã) và 0 (Bình thường)
     
     # 2. Cấu hình Kiến trúc Mô hình (Model)
-    patch_size = 16
-    depth = 16              # Độ sâu của mạng Mamba (Bản Tiny dùng 16)
-    embed_dim = 192         # Số chiều đặc trưng
+    patch_size = 32
+    depth = 4              # Độ sâu của mạng Mamba (Bản Tiny dùng 16)
+    embed_dim = 128         # Số chiều đặc trưng
     channels = 3            # Ảnh màu RGB (3 kênh)
     
     # Thông số bên trong khối Mamba (ssm_cfg)
