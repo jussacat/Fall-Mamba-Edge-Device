@@ -81,15 +81,18 @@ def main():
         train_dataset, 
         batch_size=cfg.batch_size, 
         shuffle=True, 
-        num_workers=2,      # Đặt về 0 để tránh nghẽn luồng CPU
-        pin_memory=True
+        num_workers=cfg.num_workers,    
+        pin_memory=True,
+        persistent_workers=True,    # Giữ các luồng không bị tắt/mở lại sau mỗi epoch
+        drop_last=True
     )
     val_loader = DataLoader(
         val_dataset, 
         batch_size=cfg.batch_size, 
         shuffle=False, 
-        num_workers=0,
-        pin_memory=True
+        num_workers=cfg.num_workers,
+        pin_memory=True,
+        persistent_workers=True
     )
 
     # 3. Khởi tạo Mô hình, Loss và Optimizer
@@ -109,40 +112,33 @@ def main():
 
     # 4. Vòng lặp Huấn luyện (Training Loop)
     logger.info("Start training process...")
+
+    scaler = torch.cuda.amp.GradScaler()
     for epoch in range(cfg.epochs):
         model.train()
         metrics.reset()
         train_loss = 0.0
 
-        total_train_samples = len(train_loader.dataset)
-        processed_samples = 0
-
-        pbar = tqdm(
-            train_loader, 
-            desc=f"Epoch [{epoch+1}/{cfg.epochs}] Training", 
-            total=len(train_loader),
-            leave=False
-        )
+        pbar = tqdm(train_loader, desc=f"Epoch [{epoch+1}/{cfg.epochs}] Training", leave=False)
         
-        for batch_idx, (videos, labels) in enumerate(tqdm(train_loader, desc=f"Epoch {epoch+1}/{cfg.epochs}")):
-            videos, labels = videos.to(device), labels.to(device, dtype=torch.long)
+        for batch_idx, (videos, labels) in enumerate(pbar):
+            videos = videos.to(device, non_blocking=True)
+            labels = labels.to(device, dtype=torch.long, non_blocking=True)
             
-            optimizer.zero_grad()
-            outputs = model(videos)
-            loss = criterion(outputs, labels)
+            optimizer.zero_grad(set_to_none=True)
+            with torch.cuda.amp.autocast():
+                outputs = model(videos)
+                loss = criterion(outputs, labels)
             
-            loss.backward()
-            optimizer.step()
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
             
-            train_loss += loss.item()
+            train_loss += loss.detach().item() # Dùng detach() để gỡ khỏi đồ thị trước
             metrics.update(outputs, labels)
 
-            processed_samples += videos.size(0)
-
-            pbar.set_postfix({
-                'Processed': f"{processed_samples}/{total_train_samples} videos",
-                'Loss': f"{loss.item():.4f}"
-            })
+            if batch_idx % 5 == 0:
+                pbar.set_postfix({'Loss': f"{loss.detach().item():.4f}"})
             
         train_stats = metrics.compute()
         avg_train_loss = train_loss / len(train_loader)

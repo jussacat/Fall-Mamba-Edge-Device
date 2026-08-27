@@ -24,11 +24,11 @@ class TinyConfig:
     }
     
     # 3. Cấu hình Huấn luyện (Training Hyperparameters)
-    batch_size = 4         # Có thể giảm xuống 8 nếu GPU T4 báo lỗi hết VRAM (Out of Memory)
+    batch_size = 8         # Có thể giảm xuống 8 nếu GPU T4 báo lỗi hết VRAM (Out of Memory)
     epochs = 20             # Số vòng lặp huấn luyện tối đa
     learning_rate = 2e-4    # Tốc độ học khởi tạo
     weight_decay = 0.1      # Hệ số chống Overfitting
     
     # 4. Cấu hình Hệ thống
-    num_workers = 0         # Số luồng CPU dùng để nạp dữ liệu (Kaggle hỗ trợ tốt ở mức 2-4)
+    num_workers = 2         # Số luồng CPU dùng để nạp dữ liệu (Kaggle hỗ trợ tốt ở mức 2-4)
     seed = 42               # Cố định random seed để có thể tái lập kết quả
