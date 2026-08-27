@@ -67,15 +67,31 @@ def main():
     logger.info(f"Scanning data from: {args.data_path}")
     all_paths, all_labels = get_video_paths_and_labels(args.data_path)
     
-    # Chia dữ liệu cơ bản (80% Train, 20% Val)
+    #80% Train, 20% Val
     split_idx = int(0.8 * len(all_paths))
     train_paths, val_paths = all_paths[:split_idx], all_paths[split_idx:]
     train_labels, val_labels = all_labels[:split_idx], all_labels[split_idx:]
+
+    #---------------- Oversampling -------------
+    fall_paths = [p for p, l in zip(train_paths, train_labels) if l == 1]
+    normal_count = train_labels.count(0)
+    fall_count = train_labels.count(1)
+
+    diff = normal_count - fall_count
+    logger.info(f"Total videos: Train={len(train_paths)}, Val={len(val_paths)}")
+    if diff > 0 and fall_count > 0:
+        import random
+        # Bốc ngẫu nhiên các video Ngã để đắp vào phần thiếu hụt
+        oversample_paths = random.choices(fall_paths, k=diff)
+        train_paths.extend(oversample_paths)
+        train_labels.extend([1] * diff)
+        logger.info(f"Oversampling: {diff} Fall videos.")
+    # -----------------------------------------------------------
     
     logger.info(f"Total videos: Train={len(train_paths)}, Val={len(val_paths)}")
 
-    train_dataset = Le2iDataset(train_paths, train_labels, num_frames=cfg.num_frames, transform=get_transforms(is_train=True))
-    val_dataset = Le2iDataset(val_paths, val_labels, num_frames=cfg.num_frames, transform=get_transforms(is_train=False))
+    train_dataset = Le2iDataset(train_paths, train_labels, is_train=True)
+    val_dataset = Le2iDataset(val_paths, val_labels, is_train=False)
 
     train_loader = DataLoader(
         train_dataset, 
@@ -104,7 +120,8 @@ def main():
         ssm_cfg=cfg.ssm_cfg
     ).to(device)
 
-    criterion = nn.CrossEntropyLoss()
+    class_weights = torch.tensor([1.0, 2.5]).to(device)
+    criterion = nn.CrossEntropyLoss(weight=class_weights)
     optimizer = optim.AdamW(model.parameters(), lr=cfg.learning_rate, weight_decay=cfg.weight_decay)
     
     metrics = FallMetrics()
@@ -160,9 +177,11 @@ def main():
         val_stats = metrics.compute()
         avg_val_loss = val_loss / len(val_loader)
         
-        logger.info(f"Epoch [{epoch+1}/{cfg.epochs}] "
-                    f"Train Loss: {avg_train_loss:.4f}, Train Acc: {train_stats['accuracy']:.4f} | "
-                    f"Val Loss: {avg_val_loss:.4f}, Val Acc: {val_stats['accuracy']:.4f}, Val F1: {val_stats['f1_score']:.4f}")
+        logger.info(
+            f"Epoch [{epoch+1:02d}/{cfg.epochs}] │ "
+            f"Train Loss: {avg_train_loss:.4f} - Acc: {train_stats['accuracy']*100:>5.2f}% │ "
+            f"Val Loss: {avg_val_loss:.4f} - Acc: {val_stats['accuracy']*100:>5.2f}% - F1: {val_stats['f1_score']:.4f}"
+        )
 
         # 6. Lưu mô hình tốt nhất
         if val_stats['f1_score'] > best_f1:
