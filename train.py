@@ -81,7 +81,7 @@ def main():
         train_dataset, 
         batch_size=cfg.batch_size, 
         shuffle=True, 
-        num_workers=0,      # Đặt về 0 để tránh nghẽn luồng CPU
+        num_workers=2,      # Đặt về 0 để tránh nghẽn luồng CPU
         pin_memory=True
     )
     val_loader = DataLoader(
