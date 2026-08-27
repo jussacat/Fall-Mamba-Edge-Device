@@ -81,18 +81,22 @@ def main():
 
     #---------------- Oversampling -------------
     fall_paths = [p for p, l in zip(train_paths, train_labels) if l == 1]
-    normal_count = train_labels.count(0)
-    fall_count = train_labels.count(1)
+    normal_paths = [p for p, l in zip(train_paths, train_labels) if l == 0]
 
-    diff = normal_count - fall_count
-    
-    if diff > 0 and fall_count > 0:
-        # Bốc ngẫu nhiên các video Ngã để đắp vào phần thiếu hụt
+    fall_count = len(fall_paths)
+    normal_count = len(normal_paths)
+
+    if normal_count < fall_count:
+        diff = fall_count - normal_count
+        oversample_paths = random.choices(normal_paths, k=diff)
+        train_paths.extend(oversample_paths)
+        train_labels.extend([0] * diff)
+        logger.info(f"Oversampling: {diff} Normal videos.")
+    if normal_count > fall_count:
         oversample_paths = random.choices(fall_paths, k=diff)
         train_paths.extend(oversample_paths)
         train_labels.extend([1] * diff)
         logger.info(f"Oversampling: {diff} Fall videos.")
-    # -----------------------------------------------------------
     
     logger.info(f"Total videos: Train={len(train_paths)}, Val={len(val_paths)}")
 
