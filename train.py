@@ -11,6 +11,7 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 import time
+import random
 
 
 from configs.tiny_config import TinyConfig
@@ -66,6 +67,12 @@ def main():
     # 2. Chuẩn bị Dữ liệu
     logger.info(f"Scanning data from: {args.data_path}")
     all_paths, all_labels = get_video_paths_and_labels(args.data_path)
+
+    #Shuffle data
+    combined = list(zip(all_paths, all_labels))
+    random.shuffle(combined)
+    all_paths, all_labels = zip(*combined)
+    all_paths, all_labels = list(all_paths), list(all_labels)
     
     #80% Train, 20% Val
     split_idx = int(0.8 * len(all_paths))
@@ -78,9 +85,8 @@ def main():
     fall_count = train_labels.count(1)
 
     diff = normal_count - fall_count
-    logger.info(f"Total videos: Train={len(train_paths)}, Val={len(val_paths)}")
+    
     if diff > 0 and fall_count > 0:
-        import random
         # Bốc ngẫu nhiên các video Ngã để đắp vào phần thiếu hụt
         oversample_paths = random.choices(fall_paths, k=diff)
         train_paths.extend(oversample_paths)
@@ -120,8 +126,8 @@ def main():
         ssm_cfg=cfg.ssm_cfg
     ).to(device)
 
-    class_weights = torch.tensor([1.0, 2.5]).to(device)
-    criterion = nn.CrossEntropyLoss(weight=class_weights)
+    
+    criterion = nn.CrossEntropyLoss()
     optimizer = optim.AdamW(model.parameters(), lr=cfg.learning_rate, weight_decay=cfg.weight_decay)
     
     metrics = FallMetrics()
