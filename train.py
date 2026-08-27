@@ -113,7 +113,7 @@ def main():
     # 4. Vòng lặp Huấn luyện (Training Loop)
     logger.info("Start training process...")
 
-    scaler = torch.cuda.amp.GradScaler()
+    scaler = torch.amp.GradScaler('cuda')
     for epoch in range(cfg.epochs):
         model.train()
         metrics.reset()
@@ -126,7 +126,7 @@ def main():
             labels = labels.to(device, dtype=torch.long, non_blocking=True)
             
             optimizer.zero_grad(set_to_none=True)
-            with torch.cuda.amp.autocast():
+            with torch.amp.autocast('cuda'):
                 outputs = model(videos)
                 loss = criterion(outputs, labels)
             

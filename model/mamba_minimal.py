@@ -299,26 +299,35 @@ class MambaBlock(nn.Module):
             Note: I refactored some parts out of `selective_scan_ref` out, so the functionality doesn't match exactly.
             
         """
-        (b, l, d_in) = u.shape
+        b, l, d_in = u.shape
         n = A.shape[1]
         
         # Discretize continuous parameters (A, B)
         # - A is discretized using zero-order hold (ZOH) discretization (see Section 2 Equation 4 in the Mamba paper [1])
         # - B is discretized using a simplified Euler discretization instead of ZOH. From a discussion with authors:
         #   "A is the more important term and the performance doesn't change much with the simplification on B"
-        deltaA = torch.exp(einsum(delta, A, 'b l d_in, d_in n -> b l d_in n'))
         deltaB_u = einsum(delta, B, u, 'b l d_in, b l n, b l d_in -> b l d_in n')
+        log_deltaA = einsum(delta, A, 'b l d_in, d_in n -> b l d_in n')
+        log_deltaA_cumsum = torch.cumsum(log_deltaA, dim=1)
+
+        decay = torch.exp(log_deltaA_cumsum)
+        inv_decay = torch.exp(-log_deltaA_cumsum)
+
+        x_scaled = torch.cumsum(deltaB_u * inv_decay, dim=1)
+        x = decay * x_scaled
+
+        y = einsum(x, C, 'b l d_in n, b l n -> b l d_in')
         
         # Perform selective scan (see scan_SSM() in The Annotated S4 [2])
         # Note that the below is sequential, while the official implementation does a much faster parallel scan that
         # is additionally hardware-aware (like FlashAttention).
-        x = torch.zeros((b, d_in, n), device=deltaA.device)
-        ys = []    
-        for i in range(l):
-            x = deltaA[:, i] * x + deltaB_u[:, i]
-            y = einsum(x, C[:, i, :], 'b d_in n, b n -> b d_in')
-            ys.append(y)
-        y = torch.stack(ys, dim=1)  # shape (b, l, d_in)
+        #x = torch.zeros((b, d_in, n), device=deltaA.device)
+        #ys = []    
+        #for i in range(l):
+        #    x = deltaA[:, i] * x + deltaB_u[:, i]
+        #    y = einsum(x, C[:, i, :], 'b d_in n, b n -> b d_in')
+        #    ys.append(y)
+        #y = torch.stack(ys, dim=1)  # shape (b, l, d_in)
         
         y = y + u * D
     
