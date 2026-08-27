@@ -162,7 +162,7 @@ def main():
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             optimizer.step()
   
-            train_loss += loss.detach().item() # Dùng detach() để gỡ khỏi đồ thị trước
+            train_loss += loss.detach().item()
             metrics.update(outputs, labels)
 
             if batch_idx % 5 == 0:
@@ -179,8 +179,9 @@ def main():
         with torch.no_grad():
             for videos, labels in val_loader:
                 videos, labels = videos.to(device), labels.to(device, dtype=torch.long)
-                outputs = model(videos)
-                loss = criterion(outputs, labels)
+                with torch.amp.autocast('cuda', dtype=torch.bfloat16):
+                    outputs = model(videos)
+                    loss = criterion(outputs, labels)
                 
                 val_loss += loss.item()
                 metrics.update(outputs, labels)
