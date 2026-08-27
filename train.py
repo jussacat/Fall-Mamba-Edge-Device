@@ -93,6 +93,7 @@ def main():
         train_labels.extend([0] * diff)
         logger.info(f"Oversampling: {diff} Normal videos.")
     if normal_count > fall_count:
+        diff = normal_count - fall_count
         oversample_paths = random.choices(fall_paths, k=diff)
         train_paths.extend(oversample_paths)
         train_labels.extend([1] * diff)
@@ -153,14 +154,14 @@ def main():
             labels = labels.to(device, dtype=torch.long, non_blocking=True)
             
             optimizer.zero_grad(set_to_none=True)
-            with torch.amp.autocast('cuda'):
+            with torch.amp.autocast('cuda', dtype=torch.bfloat16):
                 outputs = model(videos)
                 loss = criterion(outputs, labels)
             
-            scaler.scale(loss).backward()
-            scaler.step(optimizer)
-            scaler.update()
-            
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            optimizer.step()
+  
             train_loss += loss.detach().item() # Dùng detach() để gỡ khỏi đồ thị trước
             metrics.update(outputs, labels)
 
