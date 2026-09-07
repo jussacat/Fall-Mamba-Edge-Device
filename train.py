@@ -157,11 +157,18 @@ def main():
             with torch.amp.autocast('cuda', dtype=torch.bfloat16):
                 outputs = model(videos)
                 loss = criterion(outputs, labels)
+
+            if torch.isnan(loss):
+                print(f"Loss NaN at batch {batch_idx}!")
+                loss = torch.tensor(0.0, device=device, requires_grad=True) 
             
             scaler.scale(loss).backward()
+
             scaler.unscale_(optimizer)
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-            optimizer.step()
+
+            scaler.step(optimizer)
+            scaler.update()
   
             train_loss += loss.detach().item()
             metrics.update(outputs, labels)
