@@ -26,7 +26,7 @@ class TinyConfig:
     # 3. Cấu hình Huấn luyện (Training Hyperparameters)
     batch_size = 8         # Có thể giảm xuống 8 nếu GPU T4 báo lỗi hết VRAM (Out of Memory)
     epochs = 20             # Số vòng lặp huấn luyện tối đa
-    learning_rate = 5e-5    # Tốc độ học khởi tạo
+    learning_rate = 2e-4    # Tốc độ học khởi tạo
     weight_decay = 0.01      # Hệ số chống Overfitting
     
     # 4. Cấu hình Hệ thống

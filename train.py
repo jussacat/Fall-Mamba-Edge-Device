@@ -165,7 +165,7 @@ def main():
             scaler.scale(loss).backward()
 
             scaler.unscale_(optimizer)
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
 
             scaler.step(optimizer)
             scaler.update()
