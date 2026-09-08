@@ -29,32 +29,43 @@ print("=" * 50)
 print("  SCANNING, LABELING & FORMATTING VIDEOS WITH ROOM TAG")
 print("=" * 50)
 
-processed_videos = []
+
 KNOWN_ROOMS = ["coffee_room", "lecture_room", "office", "home"]
 
+def get_room_name(path):
+    path_lower = path.lower().replace(" ", "_")
+    for r in KNOWN_ROOMS:
+        if r in path_lower:
+            return r
+    return "unknown"
+
+def normalize_name(name):
+    return os.path.splitext(name)[0].lower().replace(" ", "")
+
+annotation_index = {}
 for root, dirs, files in os.walk(RAW_INPUT_DIR):
+    room = get_room_name(root)
+    for file in files:
+        if file.endswith(".txt"):
+            clean_name = normalize_name(file)
+            annotation_index[(room, clean_name)] = os.path.join(root, file)
+
+print(f"Created: {len(annotation_index)} file Annotation (.txt)")
+processed_videos = []
+
+for root, dirs, files in os.walk(RAW_INPUT_DIR):
+    room_name = get_room_name(root)
     for file in files:
         if file.endswith((".avi", ".mp4")):
             raw_video_path = os.path.join(root, file)
-            raw_video_name = os.path.splitext(file)[0]
+            clean_name = normalize_name(file)
+
             # Kiem tra nhan Fall dua tren file Annotation (.txt)
-            annotation_path = os.path.join(root, raw_video_name + ".txt")
-            alt_annotation_path = os.path.join(os.path.dirname(root), "Annotation_files", raw_video_name + ".txt")
+            ann_path = annotation_index.get((room_name, clean_name), None)
 
             is_fall = False
-            if (os.path.exists(annotation_path) and os.path.getsize(annotation_path) > 0):
-                is_fall = True                                                             
-            elif (os.path.exists(alt_annotation_path) and os.path.getsize(alt_annotation_path) > 0):  
-                is_fall = True            
-                                                                            
-            # Lay ten (room) tu thu muc cha de chia file theo boi canh     
-            # Eg.: Coffee_room, Home, Office, Lecture_room
-            path_lower = root.lower().replace(" ", "_")
-            room_name = "unknown"
-            for r in KNOWN_ROOMS:
-                if r in path_lower:
-                    room_name = r
-                    break
+            if ann_path is not None and os.path.exists(ann_path) and os.path.getsize(ann_path) > 0:
+                is_fall = True
 
             # Name file: [Room]_[OriginalName] 
             formatted_name = f"{room_name}_{file}"      
@@ -64,6 +75,7 @@ for root, dirs, files in os.walk(RAW_INPUT_DIR):
             # Copy video            
             shutil.copy(raw_video_path, target_path)
             processed_videos.append((target_path, os.path.splitext(formatted_name)[0]))
+            
 fall_count = len(os.listdir(FALL_DIR))
 normal_count = len(os.listdir(NORMAL_DIR))
 print(f"Total scanned : {len(processed_videos)} videos")

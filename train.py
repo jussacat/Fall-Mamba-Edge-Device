@@ -65,7 +65,7 @@ def main():
     logger.info(f"Device used: {device}")
 
     # Data preprocess
-    TEST_ROOM = "office"
+    TEST_ROOM = "coffee_room"
 
     logger.info(f"Scanning data from: {args.data_path}")
     all_paths, all_labels = get_video_paths_and_labels(args.data_path)
