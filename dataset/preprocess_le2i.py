@@ -1,5 +1,5 @@
 import os                                                                                                                                                                        
-import shutil                                                                                                                                                                    
+import shutil                                                                                                                                                                   
 import cv2                                                                                                                                                                       
 import torch                                                                                                                                                                     
 import numpy as np                                                                                                                                                               
@@ -10,10 +10,12 @@ RAW_INPUT_DIR = "/kaggle/input/datasets/tuyenldvn/falldataset-imvia"
 FORMATTED_DIR = "/kaggle/working/Le2i_Formatted"                                                                                                                                 
 CACHE_OUTPUT_FILE = "/kaggle/working/le2i_all_in_memory.pt"                                                                                                                      
 NUM_FRAMES = 8                                                                                                                                                                   
-                                                                                                                                                                                    
-os.environ["OPENCV_LOG_LEVEL"] = "OFF"                                                                                                                                           
-os.environ["OPENCV_FFMPEG_LOGLEVEL"] = "-8"                                                                                                                                      
-                                                                                                                                                                                    
+
+os.environ["OPENCV_LOG_LEVEL"] = "OFF"
+os.environ["OPENCV_FFMPEG_LOGLEVEL"] = "-8" 
+if os.path.exists(FORMATTED_DIR):                                                                                                                                     
+    shutil.rmtree(FORMATTED_DIR)                                                                                                                                    
+                                                                                                                                                                                 
 # Destination path                                                                                                                                                         
 FALL_DIR = os.path.join(FORMATTED_DIR, "Fall")                                                                                                                                   
 NORMAL_DIR = os.path.join(FORMATTED_DIR, "Normal")                                                                                                                               
@@ -25,11 +27,12 @@ mean = torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1)
 std = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1)                                                                                                                          
                                                                                                                                                                                     
 print("=" * 65)                                                                                                                                                                  
-print("  STEP 1: SCANNING, LABELING & FORMATTING VIDEOS WITH ROOM TAG")                                                                                                          
+print("  SCANNING, LABELING & FORMATTING VIDEOS WITH ROOM TAG")                                                                                                          
 print("=" * 65)                                                                                                                                                                  
                                                                                                                                                                                     
 processed_videos = []                                                                                                                                                            
-                                                                                                                                                                                    
+KNOWN_ROOMS = ["coffee_room", "lecture_room", "office", "home"]
+
 for root, dirs, files in os.walk(RAW_INPUT_DIR):                                                                                                                                 
     for file in files:                                                                                                                                                           
         if file.endswith((".avi", ".mp4")):                                                                                                                                      
@@ -41,14 +44,19 @@ for root, dirs, files in os.walk(RAW_INPUT_DIR):
             alt_annotation_path = os.path.join(os.path.dirname(root), "Annotation_files", raw_video_name + ".txt")                                                               
                                                                                                                                                                                     
             is_fall = False                                                                                                                                                      
-            if (os.path.exists(annotation_path) and os.path.getsize(annotation_path) > 0) or                                                                                   
-                (os.path.exists(alt_annotation_path) and os.path.getsize(alt_annotation_path) > 0):                                                                               
+            if (os.path.exists(annotation_path) and os.path.getsize(annotation_path) > 0):
+                is_fall = True                                                                                   
+            elif (os.path.exists(alt_annotation_path) and os.path.getsize(alt_annotation_path) > 0):                                                                               
                 is_fall = True                                                                                                                                                   
                                                                                                                                                                                     
             # Lay ten (room) tu thu muc cha de chia file theo boi canh                                                                                              
             # Eg.: Coffee_room, Home, Office, Lecture_room                                                                                                                     
-            parent_dir = os.path.basename(os.path.dirname(root))                                                                                                                 
-            room_name = parent_dir.replace(" ", "_") if parent_dir else "Unknown"                                                                                                
+            path_lower = root.lower().replace(" ", "_")
+            room_name = "unknown"
+            for r in KNOWN_ROOMS:
+                if r in path_lower:
+                    room_name = r
+                    break                                                                                                                                                                                                               
                                                                                                                                                                                     
             # Name file: [Room]_[OriginalName]                                                                                                                      
             formatted_name = f"{room_name}_{file}"                                                                                                                               
@@ -66,7 +74,7 @@ print(f"  - Fall      : {fall_count} videos")
 print(f"  - Normal    : {normal_count} videos")                                                                                                                                  
                                                                                                                                                                                     
 print("\n" + "=" * 65)                                                                                                                                                           
-print("  STEP 2: EXTRACTING 8 FRAMES & PACKING INTO IN-MEMORY TENSOR")                                                                                                           
+print("  EXTRACTING 8 FRAMES & PACKING INTO IN-MEMORY TENSOR")                                                                                                           
 print("=" * 65)                                                                                                                                                                  
                                                                                                                                                                                     
 all_data_dict = {}                                                                                                                                                               
@@ -94,9 +102,13 @@ for video_path, video_name in tqdm(processed_videos, desc="Processing Tensors"):
     cap.release()                                                                                                                                                                
                                                                                                                                                                                     
     # Zero padding if video is error or lost frames                                                                                                                              
-    while len(frames) < NUM_FRAMES:                                                                                                                                              
-        frames.append(torch.zeros((3, 224, 224)))                                                                                                                                
-                                                                                                                                                                                    
+    if len(frames) > 0:
+        while len(frames) < NUM_FRAMES:
+            frames.append(frames[-1].clone())
+    else:
+        while len(frames) < NUM_FRAMES:
+            frames.append(torch.zeros((3, 224, 224)))                                                                                                                           
+                                                                                                                                  
     all_data_dict[video_name] = torch.stack(frames)                                                                                                                              
                                                                                                                                                                                     
 # Save to one cache file                                                                                                                                         
