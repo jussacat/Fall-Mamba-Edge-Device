@@ -1,6 +1,7 @@
 import os
 import torch
 from torch.utils.data import Dataset
+import torch.nn.functional as F
 
 class Le2iDataset(Dataset):
     def __init__(self, video_paths, labels, is_train=False):
@@ -27,18 +28,49 @@ class Le2iDataset(Dataset):
             # 50% cơ hội lật ngang toàn bộ chuỗi frame (lật theo trục Width - trục cuối cùng)
             if torch.rand(1) < 0.5:
                 frames_tensor = frames_tensor.flip(-1)
-            # 2. Dark Transformation (Xác suất 30%): Giảm cường độ đặc trưng (mô phỏng thiếu sáng)
+            # 2. Random Crop & Zoom (Xác suất 40%): Mô phỏng người ở xa hoặc gần camera                                                                                          
+            if torch.rand(1) < 0.4:                                                                                                                                              
+                # Zoom ngẫu nhiên từ 85% đến 100% kích thước                                                                                                                     
+                crop_ratio = 0.85 + 0.15 * torch.rand(1).item()                                                                                                                  
+                new_h = int(224 * crop_ratio)                                                                                                                                    
+                new_w = int(224 * crop_ratio)                                                                                                                                    
+                top = torch.randint(0, 224 - new_h + 1, (1,)).item()                                                                                                             
+                left = torch.randint(0, 224 - new_w + 1, (1,)).item()                                                                                                            
+                                                                                                                                                                                    
+                cropped = frames[:, :, top:top+new_h, left:left+new_w]                                                                                                           
+                frames = F.interpolate(cropped, size=(224, 224), mode='bilinear', align_corners=False)                                                                           
+                                                                                                                                                                                    
+            # 3. Spatial Cutout / Occlusion (Xác suất 35%): Che khuất ngẫu nhiên (bàn, ghế chắn người)                                                                           
+            if torch.rand(1) < 0.35:                                                                                                                                             
+                occ_size = torch.randint(30, 65, (1,)).item()                                                                                                                    
+                occ_top = torch.randint(0, 224 - occ_size, (1,)).item()                                                                                                          
+                occ_left = torch.randint(0, 224 - occ_size, (1,)).item()                                                                                                         
+                # Che khuất đồng nhất trên toàn bộ chuỗi 8 frames                                                                                                                
+                frames[:, :, occ_top:occ_top+occ_size, occ_left:occ_left+occ_size] = 0.0                                                                                         
+                                                                                                                                                                                    
+            # 4. Temporal Jitter / Speed Perturbation (Xác suất 35%): Thay đổi tốc độ ngã (nhanh/chậm)                                                                           
+            if torch.rand(1) < 0.35:                                                                                                                                             
+                # Ngẫu nhiên chọn cách lặp hoặc nhảy frame                                                                                                                       
+                mode = torch.randint(0, 2, (1,)).item()                                                                                                                          
+                if mode == 0:  # Làm chậm (lặp lại 1 frame bất kỳ)                                                                                                               
+                    dup_idx = torch.randint(0, 7, (1,)).item()                                                                                                                   
+                    indices = list(range(8))                                                                                                                                     
+                    indices.insert(dup_idx, dup_idx)                                                                                                                             
+                    indices = indices[:8]                                                                                                                                        
+                    frames = frames[indices]                                                                                                                                     
+                else:          # Temporal Dropout: Làm mờ 1 frame ngẫu nhiên                                                                                                     
+                    drop_idx = torch.randint(0, 8, (1,)).item()                                                                                                                  
+                    frames[drop_idx] = 0.0                                                                                                                                       
+                                                                                                                                                                                    
+            # 5. Brightness & Contrast Perturbation (Xác suất 40%): Biến đổi ánh sáng phòng                                                                                      
+            if torch.rand(1) < 0.4:                                                                                                                                              
+                alpha = 0.85 + 0.3 * torch.rand(1).item()  # Độ tương phản [0.85, 1.15]                                                                                          
+                beta = (torch.rand(1).item() - 0.5) * 0.3  # Độ sáng [-0.15, +0.15]                                                                                              
+                frames = frames * alpha + beta                                                                                                                                   
+
+            # 6. Sensor Noise (Xác suất 30%): Thêm nhiễu camera an ninh ban đêm
             if torch.rand(1) < 0.3:
-                # Hệ số ngẫu nhiên từ 0.5 đến 0.8
-                dark_factor = 0.5 + 0.3 * torch.rand(1)
-                frames_tensor = frames_tensor * dark_factor
-            # 3. Frame Masking (Xác suất 30%): Che mất 1-2 khung hình ngẫu nhiên (Temporal Dropout)
-            if torch.rand(1) < 0.3:
-                # Chọn ngẫu nhiên sẽ xóa 1 hay 2 frame
-                num_masked = torch.randint(1, 3, (1,)).item()
-                
-                # Bốc ngẫu nhiên index của các frame sẽ bị xóa
-                mask_indices = torch.randperm(frames_tensor.shape[0])[:num_masked]
-                frames_tensor[mask_indices] = 0.0
-                
+                noise = torch.randn_like(frames) * 0.03
+                frames = frames + noise
+    
         return frames_tensor, torch.tensor(label, dtype=torch.float32)

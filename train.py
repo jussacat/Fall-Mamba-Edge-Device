@@ -163,8 +163,9 @@ def main():
     ).to(device)
 
     
-    criterion = nn.CrossEntropyLoss()
+    criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
     optimizer = optim.AdamW(model.parameters(), lr=cfg.learning_rate, weight_decay=cfg.weight_decay)
+    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=cfg.epochs, eta_min=1e-5)
     
     metrics = FallMetrics()
     best_f1 = 0.0
@@ -271,6 +272,7 @@ def main():
         save_path = os.path.join(args.save_path, "best_fall_mamba.pth")                                                                                                      
         torch.save(model.state_dict(), save_path)                                                                                                                            
         logger.info(f"--> [BEST MODEL SAVED] Epoch {best_epoch:02d} with F1-Score: {best_f1:.4f}")
+        scheduler.step()
 
     # FINAL EVALUATION ON UNSEEN ROOM 
     logger.info("\n" + "=" * 50)
