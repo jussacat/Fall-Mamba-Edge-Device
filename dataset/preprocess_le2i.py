@@ -8,6 +8,8 @@ from tqdm import tqdm
 # PATH
 RAW_INPUT_DIR = "/kaggle/input/datasets/tuyenldvn/falldataset-imvia"       
 FORMATTED_DIR = "/kaggle/working/Le2i_Formatted" 
+CACHE_OUTPUT_FILE = "/kaggle/working/le2i_all_in_memory.pt"
+NUM_FRAMES = 8
 
 os.environ["OPENCV_LOG_LEVEL"] = "OFF"
 os.environ["OPENCV_FFMPEG_LOGLEVEL"] = "-8" 
