@@ -137,6 +137,9 @@ def main():
     
     metrics = FallMetrics()
     best_f1 = 0.0
+    best_epoch = 0
+    best_stats = {}
+    best_counts = {}
 
     # 4. Vòng lặp Huấn luyện (Training Loop)
     logger.info("Start training process...")
@@ -197,7 +200,7 @@ def main():
         train_stats = metrics.compute()
         avg_train_loss = train_loss / len(train_loader)
         
-        # 5. Đánh giá trên tập Validation (Validation Loop)
+        # Đánh giá trên tập Validation
         model.eval()
         metrics.reset()
         val_loss = 0.0
@@ -205,7 +208,7 @@ def main():
         with torch.no_grad():
             for videos, labels in val_loader:
                 videos, labels = videos.to(device), labels.to(device, dtype=torch.long)
-                with torch.amp.autocast('cuda', dtype=torch.bfloat16):
+                with torch.amp.autocast('cuda', dtype=torch.float16):
                     outputs = model(videos)
                     loss = criterion(outputs, labels)
                 
@@ -215,20 +218,46 @@ def main():
         val_stats = metrics.compute()
         avg_val_loss = val_loss / len(val_loader)
         
-        logger.info(
-            f"Epoch [{epoch+1:02d}/{cfg.epochs}] │ "
-            f"Train Loss: {avg_train_loss:.4f} - Acc: {train_stats['accuracy']*100:>5.2f}% │ "
-            f"Val Loss: {avg_val_loss:.4f} - Acc: {val_stats['accuracy']*100:>5.2f}% - F1: {val_stats['f1_score']:.4f}"
+        logger.info(                                                                                                                                                             
+                f"Epoch [{epoch+1:02d}/{cfg.epochs}] │ "                                                                                                                             
+                f"Train: Loss={avg_train_loss:.4f}, Acc={train_stats['accuracy']*100:>5.2f}% │ "                                                                                     
+                f"Val: Loss={avg_val_loss:.4f}, Acc={val_stats['accuracy']*100:>5.2f}%, F1={val_stats['f1_score']:.4f}, "                                                            
+                f"Recall={val_stats['sensitivity']*100:>5.2f}%, Spec={val_stats['specificity']*100:>5.2f}% │ "                                                                       
+                f"[TP={metrics.tp}, FN={metrics.fn}, TN={metrics.tn}, FP={metrics.fp}]"                                                                                              
         )
 
         # 6. Lưu mô hình tốt nhất
-        if val_stats['f1_score'] > best_f1:
-            best_f1 = val_stats['f1_score']
-            save_path = os.path.join(args.save_path, "best_fall_mamba.pth")
-            torch.save(model.state_dict(), save_path)
-            logger.info(f"--> Best model saved at F1-Score: {best_f1:.4f}")
+        if val_stats['f1_score'] > best_f1:                                                                                                                                      
+                best_f1 = val_stats['f1_score']                                                                                                                                      
+                best_epoch = epoch + 1                                                                                                                                               
+                best_stats = val_stats.copy()                                                                                                                                        
+                best_counts = {                                                                                                                                                      
+                    'tp': metrics.tp,                                                                                                                                                
+                    'fn': metrics.fn,                                                                                                                                                
+                    'tn': metrics.tn,                                                                                                                                                
+                    'fp': metrics.fp                                                                                                                                                 
+        }                                                                                                                                                                    
+        save_path = os.path.join(args.save_path, "best_fall_mamba.pth")                                                                                                      
+        torch.save(model.state_dict(), save_path)                                                                                                                            
+        logger.info(f"--> [BEST MODEL SAVED] Epoch {best_epoch:02d} with F1-Score: {best_f1:.4f}")
 
-    logger.info("Training successful!")
+    logger.info("\n" + "=" * 75)                                                                                                                                                 
+    logger.info(f"          FINAL EVALUATION SUMMARY (BEST MODEL - EPOCH {best_epoch:02d})")                                                                                     
+    logger.info("=" * 75)                                                                                                                                                        
+    logger.info(f"Total Validation Videos : {len(val_paths)}")                                                                                                                   
+    logger.info(f"Overall Accuracy        : {best_stats['accuracy']*100:.2f}% ({best_counts['tp'] + best_counts['tn']}/{len(val_paths)} videos correctly classified)")           
+    logger.info(f"F1-Score                : {best_stats['f1_score']:.4f}")                                                                                                       
+    logger.info(f"Sensitivity (Recall)    : {best_stats['sensitivity']*100:.2f}% (Detection rate of actual falls)")
+    logger.info(f"Specificity             : {best_stats['specificity']*100:.2f}% (Ability to avoid false alarms)")
+    logger.info("-" * 75)
+    logger.info("CONFUSION MATRIX BREAKDOWN:")
+    logger.info(f"  * True Positive  (TP) : {best_counts['tp']:>2} video(s) -> Actual Fall correctly detected")
+    logger.info(f"  * False Negative (FN) : {best_counts['fn']:>2} video(s) -> Actual Fall MISSED (Critical safety error)")
+    logger.info(f"  * True Negative  (TN) : {best_counts['tn']:>2} video(s) -> Normal action correctly classified")
+    logger.info(f"  * False Positive (FP) : {best_counts['fp']:>2} video(s) -> False Alarm (Normal misclassified as Fall)")
+    logger.info("=" * 75)
+    logger.info(f"Best model weights saved at: {os.path.join(args.save_path, 'best_fall_mamba.pth')}")
+    logger.info("Training completed successfully!")
 
 if __name__ == "__main__":
     main()
