@@ -4,7 +4,6 @@ from einops import rearrange
 from timm.models.layers import DropPath, trunc_normal_
 from functools import partial
 
-# Import từ các file module của bạn
 from .feature_extractor import VideoFeatureExtractor, PatchEmbed
 from .temporal_block import create_block
 
@@ -52,77 +51,125 @@ class FallMamba(nn.Module):
         self.embed_dim = embed_dim
         
         # 1. Gọi Feature Extractor
-        self.patch_embed = PatchEmbed(img_size=img_size, patch_size=patch_size, kernel_size=kernel_size, in_chans=channels, embed_dim=embed_dim)
-        self.video_feature_extractor = VideoFeatureExtractor(embed_dim)
+        #self.patch_embed = PatchEmbed(img_size=img_size, patch_size=patch_size, kernel_size=kernel_size, in_chans=channels, embed_dim=embed_dim)
+        self.feature_extractor = VideoFeatureExtractor(embed_dim=embed_dim)
 
         # Các token và embedding vị trí
-        num_patches = self.patch_embed.num_patches
-        self.cls_token = nn.Parameter(torch.zeros(1, 1, self.embed_dim))
-        self.pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, self.embed_dim))
-        self.temporal_pos_embedding = nn.Parameter(torch.zeros(1, (num_frames // kernel_size) * 200, embed_dim))
+        #num_patches = self.patch_embed.num_patches
+        #self.cls_token = nn.Parameter(torch.zeros(1, 1, self.embed_dim))
+        #self.pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, self.embed_dim))
+        #self.temporal_pos_embedding = nn.Parameter(torch.zeros(1, (num_frames // kernel_size) * 200, embed_dim))
+        #self.pos_drop = nn.Dropout(p=drop_rate)
+        self.temporal_pos_embed = nn.Parameter(torch.zeros(1, num_frames, embed_dim))                                                                                            
+        nn.init.trunc_normal_(self.temporal_pos_embed, std=0.02)                                                                                                                 
         self.pos_drop = nn.Dropout(p=drop_rate)
 
 
         # Classifier Head
-        self.head_drop = nn.Dropout(fc_drop_rate) if fc_drop_rate > 0 else nn.Identity()
-        self.head = nn.Linear(self.embed_dim, num_classes)
+        #self.head_drop = nn.Dropout(fc_drop_rate) if fc_drop_rate > 0 else nn.Identity()
+        #self.head = nn.Linear(self.embed_dim, num_classes)
 
-        # 2. Xây dựng các layer Mamba (Gọi từ temporal_block.py)
-        dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]
-        self.layers = nn.ModuleList()
-        for i in range(depth):
-            block = create_block(
-                embed_dim, ssm_cfg=ssm_cfg, norm_epsilon=norm_epsilon, rms_norm=rms_norm,
-                residual_in_fp32=residual_in_fp32, fused_add_norm=fused_add_norm, layer_idx=i,
-                bimamba=bimamba, drop_path=dpr[i], apply_temporal_attention=(i < 0), max_len=(num_frames*200)
-            )
-            self.layers.append(block)
+        self.layers = nn.ModuleList([                                                                                                                                            
+            create_block(                                                                                                                                                        
+                d_model=embed_dim,                                                                                                                                               
+                ssm_cfg=ssm_cfg,                                                                                                                                                 
+                layer_idx=i,                                                                                                                                                     
+                apply_temporal_attention=False, # Chỉ cần Mamba nguyên bản                                                                                                       
+                max_len=num_frames                                                                                                                                               
+            )                                                                                                                                                                    
+            for i in range(depth)                                                                                                                                                
+        ])                       
 
-        self.norm_f = nn.LayerNorm(embed_dim, eps=norm_epsilon)
+        #dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]
+        #self.layers = nn.ModuleList()
+        #for i in range(depth):
+        #    block = create_block(
+        #        embed_dim, ssm_cfg=ssm_cfg, norm_epsilon=norm_epsilon, rms_norm=rms_norm,
+        #       residual_in_fp32=residual_in_fp32, fused_add_norm=fused_add_norm, layer_idx=i,
+        #        bimamba=bimamba, drop_path=dpr[i], apply_temporal_attention=(i < 0), max_len=(num_frames*200)
+        #    )
+        #    self.layers.append(block)
 
-        self.apply(segm_init_weights)
-        self.head.apply(segm_init_weights)
-        trunc_normal_(self.pos_embed, std=.02)
+        self.norm = nn.LayerNorm(embed_dim) 
 
-    def forward_features(self, video):
+        #self.norm_f = nn.LayerNorm(embed_dim, eps=norm_epsilon)
 
-        B, T, C, H, W = video.shape
-        video = video.view(B * T, C, H, W)
+        #self.apply(segm_init_weights)
+        #self.head.apply(segm_init_weights)
+        #trunc_normal_(self.pos_embed, std=.02)
+
+        self.classifier = nn.Sequential(                                                                                                                                         
+            nn.Dropout(drop_rate),                                                                                                                                               
+            nn.Linear(embed_dim, num_classes)                                                                                                                                    
+        )    
+
+    # def forward_features(self, video):
+
+    #     B, T, C, H, W = video.shape
+    #     video = video.view(B * T, C, H, W)
             
-        video_features = self.video_feature_extractor(video)
-        video_features = video_features.view(B, T, self.embed_dim).permute(0, 2, 1)
-        video_features = video_features.unsqueeze(2).unsqueeze(2)
-        video_features = video_features.expand(-1, -1, H, W, -1)
-        video_features = video_features.permute(0, 1, 4, 2, 3)
+    #     video_features = self.video_feature_extractor(video)
+    #     video_features = video_features.view(B, T, self.embed_dim).permute(0, 2, 1)
+    #     video_features = video_features.unsqueeze(2).unsqueeze(2)
+    #     video_features = video_features.expand(-1, -1, H, W, -1)
+    #     video_features = video_features.permute(0, 1, 4, 2, 3)
             
-        if video_features.shape[1] > 3:
-            video_features = video_features[:, :3, :, :, :]
+    #     if video_features.shape[1] > 3:
+    #         video_features = video_features[:, :3, :, :, :]
                 
-        x = self.patch_embed(video_features)
+    #     x = self.patch_embed(video_features)
             
-        B, C, T, H, W = x.shape
-        x = x.permute(0, 2, 3, 4, 1).reshape(B * T, H * W, C)
+    #     B, C, T, H, W = x.shape
+    #     x = x.permute(0, 2, 3, 4, 1).reshape(B * T, H * W, C)
 
-        cls_token = self.cls_token.expand(x.shape[0], -1, -1)
-        x = torch.cat((x[:, :x.size(1) // 2, :], cls_token, x[:, x.size(1) // 2:, :]), dim=1)
-        x = x + self.pos_embed
+    #     cls_token = self.cls_token.expand(x.shape[0], -1, -1)
+    #     x = torch.cat((x[:, :x.size(1) // 2, :], cls_token, x[:, x.size(1) // 2:, :]), dim=1)
+    #     x = x + self.pos_embed
 
-        cls_tokens = x[:B, :1, :]
-        x = x[:, 1:]
-        x = rearrange(x, '(b t) n m -> (b n) t m', b=B, t=T)
-        x = x + self.temporal_pos_embedding[:, :T, :]
-        x = rearrange(x, '(b n) t m -> b (t n) m', b=B, t=T)
-        x = torch.cat((cls_tokens, x), dim=1)
+    #     cls_tokens = x[:B, :1, :]
+    #     x = x[:, 1:]
+    #     x = rearrange(x, '(b t) n m -> (b n) t m', b=B, t=T)
+    #     x = x + self.temporal_pos_embedding[:, :T, :]
+    #     x = rearrange(x, '(b n) t m -> b (t n) m', b=B, t=T)
+    #     x = torch.cat((cls_tokens, x), dim=1)
 
-        x = self.pos_drop(x)
+    #     x = self.pos_drop(x)
             
-        for layer in self.layers:
-            x, _ = layer(x)
+    #     for layer in self.layers:
+    #         x, _ = layer(x)
 
-        x = self.norm_f(x)
-        return x[:, 0, :]
+    #     x = self.norm_f(x)
+    #     return x[:, 0, :]
 
-    def forward(self, video):
-        x = self.forward_features(video)
-        x = self.head(self.head_drop(x))
-        return x
+    # def forward(self, video):
+    #     x = self.forward_features(video)
+    #     x = self.head(self.head_drop(x))
+    #     return x
+    
+    def forward(self, video):                                                                                                                                                    
+            # video shape: (B, T, C, H, W)                                                                                                                                           
+            B, T, C, H, W = video.shape                                                                                                                                              
+                                                                                                                                                                                     
+            # Gom Batch và Time để ResNet xử lý: (B*T, C, H, W)                                                                                                                      
+            video_flat = video.view(B * T, C, H, W)                                                                                                                                  
+            feats = self.feature_extractor(video_flat)  # Output: (B*T, embed_dim)                                                                                                   
+                                                                                                                                                                                     
+            # Chuyển về dạng chuỗi thời gian: (B, T, embed_dim)                                                                                                                      
+            x = feats.view(B, T, self.embed_dim)                                                                                                                                     
+                                                                                                                                                                                     
+            # Cộng thông tin thứ tự thời gian                                                                                                                                        
+            x = x + self.temporal_pos_embed[:, :T, :]                                                                                                                                
+            x = self.pos_drop(x)                                                                                                                                                     
+                                                                                                                                                                                     
+            # Cho qua các lớp Mamba để học chuỗi chuyển động                                                                                                                         
+            for layer in self.layers:                                                                                                                                                
+                x, _ = layer(x)                                                                                                                                                      
+                                                                                                                                                                                     
+            x = self.norm(x)                                                                                                                                                         
+                                                                                                                                                                                     
+            # Temporal Average Pooling: Gom thông tin của cả 8 frames lại                                                                                                            
+            video_rep = x.mean(dim=1)  # (B, embed_dim)                                                                                                                              
+                                                                                                                                                                                     
+            # Đưa qua bộ phân loại (Logits)                                                                                                                                          
+            logits = self.classifier(video_rep)  # (B, num_classes)                                                                                                                  
+            return logits 

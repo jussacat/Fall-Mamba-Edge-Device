@@ -12,7 +12,7 @@ class TinyConfig:
     # 2. Cấu hình Kiến trúc Mô hình (Model)
     patch_size = 32
     depth = 4              # Độ sâu của mạng Mamba (Bản Tiny dùng 16)
-    embed_dim = 128         # Số chiều đặc trưng
+    embed_dim = 256         # Số chiều đặc trưng
     channels = 3            # Ảnh màu RGB (3 kênh)
     
     # Thông số bên trong khối Mamba (ssm_cfg)
@@ -24,7 +24,7 @@ class TinyConfig:
     }
     
     # 3. Cấu hình Huấn luyện (Training Hyperparameters)
-    batch_size = 8         # Có thể giảm xuống 8 nếu GPU T4 báo lỗi hết VRAM (Out of Memory)
+    batch_size = 16         # Có thể giảm xuống 8 nếu GPU T4 báo lỗi hết VRAM (Out of Memory)
     epochs = 20             # Số vòng lặp huấn luyện tối đa
     learning_rate = 2e-4    # Tốc độ học khởi tạo
     weight_decay = 0.01      # Hệ số chống Overfitting

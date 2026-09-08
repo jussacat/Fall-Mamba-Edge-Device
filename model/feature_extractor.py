@@ -11,17 +11,29 @@ class VideoFeatureExtractor(nn.Module):
         for param in resnet.parameters():
             param.requires_grad = False
 
-        self.feature_extractor = nn.Sequential(*list(resnet.children())[:-2])  
-        self.pool = nn.AdaptiveAvgPool2d((1, 1)) 
-        self.fc = nn.Linear(resnet.fc.in_features, embed_dim)
+        # self.feature_extractor = nn.Sequential(*list(resnet.children())[:-2])  
+        # self.pool = nn.AdaptiveAvgPool2d((1, 1)) 
+        # self.fc = nn.Linear(resnet.fc.in_features, embed_dim)
+
+        self.backbone = nn.Sequential(*list(resnet.children())[:-1])
+
+        self.proj = nn.Sequential(
+            nn.Flatten(),
+            nn.Linear(2048, embed_dim),
+            nn.LayerNorm(embed_dim),
+            nn.ReLU()
+        )
 
     def forward(self, x):
         with torch.no_grad():
-            x = self.feature_extractor(x)
-            x = self.pool(x) 
-            x = torch.flatten(x, 1)
-        x = self.fc(x)
-        return x
+        #     x = self.feature_extractor(x)
+        #     x = self.pool(x) 
+        #     x = torch.flatten(x, 1)
+        # x = self.fc(x)
+        # return x
+            feat = self.backbone(x)
+        out = self.proj(feat)
+        return out
 
 
 class PatchEmbed(nn.Module):
