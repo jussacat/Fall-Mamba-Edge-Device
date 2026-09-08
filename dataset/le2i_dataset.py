@@ -20,14 +20,14 @@ class Le2iDataset(Dataset):
         video_name = os.path.splitext(os.path.basename(original_path))[0]
         
         # Dùng .clone() để tránh làm thay đổi tensor gốc lưu trong RAM khi Augment
-        frames_tensor = self.data_dict.get(video_name, torch.zeros((8, 3, 224, 224))).clone()
+        frames = self.data_dict.get(video_name, torch.zeros((8, 3, 224, 224))).clone()
         label = self.labels[idx]
         
         # Thực hiện Data Augmentation trên GPU/CPU cho tập Train
         if self.is_train:
             # 50% cơ hội lật ngang toàn bộ chuỗi frame (lật theo trục Width - trục cuối cùng)
             if torch.rand(1) < 0.5:
-                frames_tensor = frames_tensor.flip(-1)
+                frames = frames.flip(-1)
             # 2. Random Crop & Zoom (Xác suất 40%): Mô phỏng người ở xa hoặc gần camera                                                                                          
             if torch.rand(1) < 0.4:                                                                                                                                              
                 # Zoom ngẫu nhiên từ 85% đến 100% kích thước                                                                                                                     
@@ -73,4 +73,4 @@ class Le2iDataset(Dataset):
                 noise = torch.randn_like(frames) * 0.03
                 frames = frames + noise
     
-        return frames_tensor, torch.tensor(label, dtype=torch.float32)
+        return frames, torch.tensor(label, dtype=torch.float32)
