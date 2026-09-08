@@ -65,34 +65,43 @@ def main():
     logger.info(f"Device used: {device}")
 
     # Data preprocess
-    TEST_ROOM = "coffee_room"
+    TEST_ROOM = "office"
 
     logger.info(f"Scanning data from: {args.data_path}")
     all_paths, all_labels = get_video_paths_and_labels(args.data_path)
 
-    # Split data: TEST_ROOM is the Unseen Room                                                                                                              
-    test_paths, test_labels = [], []                                                                                                                                             
-    train_val_paths, train_val_labels = [], [] 
+    fall_items = [(p, l) for p, l in zip(all_paths, all_labels) if l == 1]
+    normal_items = [(p, l) for p, l in zip(all_paths, all_labels) if l == 0]
 
-    for p, l in zip(all_paths, all_labels):                                                                                                                                      
-        file_name = os.path.basename(p).lower()                                                                                                                                  
-        if TEST_ROOM in file_name:                                                                                                                                               
-            test_paths.append(p)                                                                                                                                                 
-            test_labels.append(l)                                                                                                                                                
-        else:                                                                                                                                                                    
-            train_val_paths.append(p)                                                                                                                                            
-            train_val_labels.append(l)
+    random.shuffle(fall_items)
+    random.shuffle(normal_items)
+
+    def split_items(items):
+        n = len(items)
+        train_end = int(0.7 * n)
+        val_end = int(0.8 * n)
+        return items[:train_end], items[train_end:val_end], items[val_end:]
+
+    # Split data: TEST_ROOM is the Unseen Room 
+    train_fall, val_fall, test_fall = split_items(fall_items)
+    train_norm, val_norm, test_norm = split_items(normal_items) 
 
     #Shuffle data
-    combined = list(zip(train_val_paths, train_val_labels))
-    random.shuffle(combined)
-    train_val_paths, train_val_labels = zip(*combined)                                                                                                                           
-    train_val_paths, train_val_labels = list(train_val_paths), list(train_val_labels)
-    
-    #80% Train, 20% Val
-    split_idx = int(0.8 * len(train_val_paths))
-    train_paths, val_paths = train_val_paths[:split_idx], train_val_paths[split_idx:]
-    train_labels, val_labels = train_val_labels[:split_idx], train_val_labels[split_idx:]
+    train_combined = train_fall + train_norm
+    val_combined = val_fall + val_norm
+    test_combined = test_fall + test_norm
+
+    random.shuffle(train_combined)
+    random.shuffle(val_combined)
+    random.shuffle(test_combined)
+
+    train_paths, train_labels = zip(*train_combined)
+    val_paths, val_labels = zip(*val_combined)
+    test_paths, test_labels = zip(*test_combined)
+
+    train_paths, train_labels = list(train_paths), list(train_labels)
+    val_paths, val_labels = list(val_paths), list(val_labels)
+    test_paths, test_labels = list(test_paths), list(test_labels)
 
     #---------------- Oversampling -------------
     fall_paths = [p for p, l in zip(train_paths, train_labels) if l == 1]
@@ -114,11 +123,11 @@ def main():
         train_labels.extend([1] * diff)
         logger.info(f"Oversampling: {diff} Fall videos.")
     
-    logger.info(f"Protocol: Leave-One-Room-Out (Test Room: '{TEST_ROOM.upper()}')")                                                                                              
-    logger.info(f"Dataset Split: Train={len(train_paths)}, Val={len(val_paths)}, Unseen Test={len(test_paths)}")                                                                 
+    logger.info("Protocol: Stratified Split (70% Train, 10% Val, 20% Test)")                                                                                              
+    logger.info(f"Dataset Split: Train={len(train_paths)} (Cân bằng sau oversample), Val={len(val_paths)}, Test={len(test_paths)}")                                                                 
                                                                                                                     
 
-    train_dataset = Le2iDataset(train_paths, train_labels, is_train=True)                                                                                                        
+    train_dataset = Le2iDataset(train_paths, train_labels, is_train=True)
     val_dataset = Le2iDataset(val_paths, val_labels, is_train=False)                                                                                                             
     test_dataset = Le2iDataset(test_paths, test_labels, is_train=False)                                                                                                          
                                                                                                                                                                                     
@@ -265,7 +274,7 @@ def main():
 
     # FINAL EVALUATION ON UNSEEN ROOM 
     logger.info("\n" + "=" * 50)
-    logger.info(f"       FINAL BENCHMARK ON UNSEEN ROOM: [{TEST_ROOM.upper()}] ({len(test_paths)} VIDEOS)")
+    logger.info(f"   FINAL BENCHMARK ON TEST SET ({len(test_paths)} VIDEOS)")
     logger.info("=" * 50)
     
     best_model_path = os.path.join(args.save_path, "best_fall_mamba.pth")
