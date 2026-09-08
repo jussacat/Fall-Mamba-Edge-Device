@@ -142,6 +142,21 @@ def main():
     logger.info("Start training process...")
 
     scaler = torch.amp.GradScaler('cuda')
+
+    sample_v, sample_l = next(iter(train_loader))
+    shape = sample_v.shape
+    min_val = sample_v.min().item()
+    max_val = sample_v.max().item()
+    has_nan = torch.isnan(sample_v).any().item()
+
+    print(
+        f"Kiểm tra dữ liệu mẫu: "
+        f"Shape={shape}, "
+        f"Min={min_val:.3f}, "
+        f"Max={max_val:.3f}, "
+        f"NaN={has_nan}"
+    )
+
     for epoch in range(cfg.epochs):
         model.train()
         metrics.reset()
@@ -154,18 +169,21 @@ def main():
             labels = labels.to(device, dtype=torch.long, non_blocking=True)
             
             optimizer.zero_grad(set_to_none=True)
-            with torch.amp.autocast('cuda', dtype=torch.bfloat16):
+
+            with torch.amp.autocast('cuda', dtype=torch.float16):
                 outputs = model(videos)
                 loss = criterion(outputs, labels)
 
-            if torch.isnan(loss):
-                print(f"Loss NaN at batch {batch_idx}!")
-                loss = torch.tensor(0.0, device=device, requires_grad=True) 
+            if torch.isnan(loss) or torch.isinf(loss):
+                print(f"[WARNING] Loss NaN/Inf in batch {batch_idx}! Skipping this batch...")
+                optimizer.zero_grad(set_to_none=True)
+                continue
             
             scaler.scale(loss).backward()
-
             scaler.unscale_(optimizer)
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
+
+            #Gradient 1.0
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
 
             scaler.step(optimizer)
             scaler.update()

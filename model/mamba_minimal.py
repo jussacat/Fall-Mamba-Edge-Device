@@ -306,17 +306,28 @@ class MambaBlock(nn.Module):
         # - A is discretized using zero-order hold (ZOH) discretization (see Section 2 Equation 4 in the Mamba paper [1])
         # - B is discretized using a simplified Euler discretization instead of ZOH. From a discussion with authors:
         #   "A is the more important term and the performance doesn't change much with the simplification on B"
+        # deltaB_u = einsum(delta, B, u, 'b l d_in, b l n, b l d_in -> b l d_in n')
+        # log_deltaA = einsum(delta, A, 'b l d_in, d_in n -> b l d_in n')
+        # log_deltaA_cumsum = torch.cumsum(log_deltaA, dim=1)
+        deltaA = torch.exp(einsum(delta, A, 'b l d_in, d_in n -> b l d_in n'))                                                                                                   
         deltaB_u = einsum(delta, B, u, 'b l d_in, b l n, b l d_in -> b l d_in n')
-        log_deltaA = einsum(delta, A, 'b l d_in, d_in n -> b l d_in n')
-        log_deltaA_cumsum = torch.cumsum(log_deltaA, dim=1)
 
-        decay = torch.exp(log_deltaA_cumsum)
-        inv_decay = torch.exp(-log_deltaA_cumsum)
+        x = torch.zeros((b, d_in, n), device=u.device, dtype=u.dtype)                                                                                                            
+        ys = []                                                                                                                                                                  
+        for t in range(l):                                                                                                                                                       
+            x = deltaA[:, t] * x + deltaB_u[:, t]                                                                                                                                
+            y_t = einsum(x, C[:, t], 'b d_in n, b n -> b d_in')                                                                                                                  
+            ys.append(y_t)                                                                                                                                                       
+                                                                                                                                                                                     
+        y = torch.stack(ys, dim=1) + u * D                                                                                                                                       
+        return y      
+        # decay = torch.exp(log_deltaA_cumsum)
+        # inv_decay = torch.exp(-log_deltaA_cumsum)
 
-        x_scaled = torch.cumsum(deltaB_u * inv_decay, dim=1)
-        x = decay * x_scaled
+        # x_scaled = torch.cumsum(deltaB_u * inv_decay, dim=1)
+        # x = decay * x_scaled
 
-        y = einsum(x, C, 'b l d_in n, b l n -> b l d_in')
+        # y = einsum(x, C, 'b l d_in n, b l n -> b l d_in')
         
         # Perform selective scan (see scan_SSM() in The Annotated S4 [2])
         # Note that the below is sequential, while the official implementation does a much faster parallel scan that
@@ -329,9 +340,9 @@ class MambaBlock(nn.Module):
         #    ys.append(y)
         #y = torch.stack(ys, dim=1)  # shape (b, l, d_in)
         
-        y = y + u * D
+        # y = y + u * D
     
-        return y
+        # return y
 
 
 class RMSNorm(nn.Module):
