@@ -55,29 +55,44 @@ def main():
 
     os.makedirs(args.save_path, exist_ok=True)
     
-    # Khởi tạo Logger và đọc Config
+    # Initial logger and read config file
     logger = setup_logger(os.path.join(args.save_path, "train.log"))
     cfg = TinyConfig()
     logger.info("Start training Fall-Mamba...")
 
-    # Thiết lập thiết bị (GPU nếu có, ngược lại dùng CPU)
+    # Device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logger.info(f"Device used: {device}")
 
-    # 2. Chuẩn bị Dữ liệu
+    # Data preprocess
+    TEST_ROOM = "office"
+
     logger.info(f"Scanning data from: {args.data_path}")
     all_paths, all_labels = get_video_paths_and_labels(args.data_path)
 
+    # Split data: TEST_ROOM is the Unseen Room                                                                                                              
+    test_paths, test_labels = [], []                                                                                                                                             
+    train_val_paths, train_val_labels = [], [] 
+
+    for p, l in zip(all_paths, all_labels):                                                                                                                                      
+        file_name = os.path.basename(p).lower()                                                                                                                                  
+        if TEST_ROOM in file_name:                                                                                                                                               
+            test_paths.append(p)                                                                                                                                                 
+            test_labels.append(l)                                                                                                                                                
+        else:                                                                                                                                                                    
+            train_val_paths.append(p)                                                                                                                                            
+            train_val_labels.append(l)
+
     #Shuffle data
-    combined = list(zip(all_paths, all_labels))
+    combined = list(zip(train_val_paths, train_val_labels))
     random.shuffle(combined)
-    all_paths, all_labels = zip(*combined)
-    all_paths, all_labels = list(all_paths), list(all_labels)
+    train_val_paths, train_val_labels = zip(*combined)                                                                                                                           
+    train_val_paths, train_val_labels = list(train_val_paths), list(train_val_labels)
     
     #80% Train, 20% Val
-    split_idx = int(0.8 * len(all_paths))
-    train_paths, val_paths = all_paths[:split_idx], all_paths[split_idx:]
-    train_labels, val_labels = all_labels[:split_idx], all_labels[split_idx:]
+    split_idx = int(0.8 * len(train_val_paths))
+    train_paths, val_paths = train_val_paths[:split_idx], train_val_paths[split_idx:]
+    train_labels, val_labels = train_val_labels[:split_idx], train_val_labels[split_idx:]
 
     #---------------- Oversampling -------------
     fall_paths = [p for p, l in zip(train_paths, train_labels) if l == 1]
@@ -99,10 +114,17 @@ def main():
         train_labels.extend([1] * diff)
         logger.info(f"Oversampling: {diff} Fall videos.")
     
-    logger.info(f"Total videos: Train={len(train_paths)}, Val={len(val_paths)}")
+    logger.info(f"Protocol: Leave-One-Room-Out (Test Room: '{TEST_ROOM.upper()}')")                                                                                              
+    logger.info(f"Dataset Split: Train={len(train_paths)}, Val={len(val_paths)}, Unseen Test={len(test_paths)}")                                                                 
+                                                                                                                    
 
-    train_dataset = Le2iDataset(train_paths, train_labels, is_train=True)
-    val_dataset = Le2iDataset(val_paths, val_labels, is_train=False)
+    train_dataset = Le2iDataset(train_paths, train_labels, is_train=True)                                                                                                        
+    val_dataset = Le2iDataset(val_paths, val_labels, is_train=False)                                                                                                             
+    test_dataset = Le2iDataset(test_paths, test_labels, is_train=False)                                                                                                          
+                                                                                                                                                                                    
+    train_loader = DataLoader(train_dataset, batch_size=cfg.batch_size, shuffle=True, drop_last=True)                                                                            
+    val_loader = DataLoader(val_dataset, batch_size=cfg.batch_size, shuffle=False)                                                                                               
+    test_loader = DataLoader(test_dataset, batch_size=cfg.batch_size, shuffle=False)
 
     train_loader = DataLoader(
         train_dataset, 
@@ -200,7 +222,7 @@ def main():
         train_stats = metrics.compute()
         avg_train_loss = train_loss / len(train_loader)
         
-        # Đánh giá trên tập Validation
+        # Train Validation
         model.eval()
         metrics.reset()
         val_loss = 0.0
@@ -226,7 +248,7 @@ def main():
                 f"[TP={metrics.tp}, FN={metrics.fn}, TN={metrics.tn}, FP={metrics.fp}]"                                                                                              
         )
 
-        # 6. Lưu mô hình tốt nhất
+        # Save best model
         if val_stats['f1_score'] > best_f1:                                                                                                                                      
                 best_f1 = val_stats['f1_score']                                                                                                                                      
                 best_epoch = epoch + 1                                                                                                                                               
@@ -241,23 +263,39 @@ def main():
         torch.save(model.state_dict(), save_path)                                                                                                                            
         logger.info(f"--> [BEST MODEL SAVED] Epoch {best_epoch:02d} with F1-Score: {best_f1:.4f}")
 
-    logger.info("\n" + "=" * 75)                                                                                                                                                 
-    logger.info(f"          FINAL EVALUATION SUMMARY (BEST MODEL - EPOCH {best_epoch:02d})")                                                                                     
-    logger.info("=" * 75)                                                                                                                                                        
-    logger.info(f"Total Validation Videos : {len(val_paths)}")                                                                                                                   
-    logger.info(f"Overall Accuracy        : {best_stats['accuracy']*100:.2f}% ({best_counts['tp'] + best_counts['tn']}/{len(val_paths)} videos correctly classified)")           
-    logger.info(f"F1-Score                : {best_stats['f1_score']:.4f}")                                                                                                       
-    logger.info(f"Sensitivity (Recall)    : {best_stats['sensitivity']*100:.2f}% (Detection rate of actual falls)")
-    logger.info(f"Specificity             : {best_stats['specificity']*100:.2f}% (Ability to avoid false alarms)")
-    logger.info("-" * 75)
-    logger.info("CONFUSION MATRIX BREAKDOWN:")
-    logger.info(f"  * True Positive  (TP) : {best_counts['tp']:>2} video(s) -> Actual Fall correctly detected")
-    logger.info(f"  * False Negative (FN) : {best_counts['fn']:>2} video(s) -> Actual Fall MISSED (Critical safety error)")
-    logger.info(f"  * True Negative  (TN) : {best_counts['tn']:>2} video(s) -> Normal action correctly classified")
-    logger.info(f"  * False Positive (FP) : {best_counts['fp']:>2} video(s) -> False Alarm (Normal misclassified as Fall)")
-    logger.info("=" * 75)
-    logger.info(f"Best model weights saved at: {os.path.join(args.save_path, 'best_fall_mamba.pth')}")
-    logger.info("Training completed successfully!")
+    # FINAL EVALUATION ON UNSEEN ROOM 
+    logger.info("\n" + "=" * 50)
+    logger.info(f"       FINAL BENCHMARK ON UNSEEN ROOM: [{TEST_ROOM.upper()}] ({len(test_paths)} VIDEOS)")
+    logger.info("=" * 50)
+    
+    best_model_path = os.path.join(args.save_path, "best_fall_mamba.pth")
+    best_checkpoint = torch.load(best_model_path, map_location=device)
+    model.load_state_dict(best_checkpoint)
+    model.eval()
+    
+    test_metrics = FallMetrics()
+    with torch.no_grad():
+        for videos, labels in test_loader:
+            videos, labels = videos.to(device), labels.to(device, dtype=torch.long)
+            with torch.amp.autocast('cuda', dtype=torch.float16):
+                outputs = model(videos)
+            test_metrics.update(outputs, labels)
+
+    test_stats = test_metrics.compute()
+    logger.info(f"Unseen Test Accuracy    : {test_stats['accuracy']*100:.2f}% ({test_metrics.tp + test_metrics.tn}/{len(test_paths)} correct)")
+    logger.info(f"Unseen Test F1-Score    : {test_stats['f1_score']:.4f}")
+    logger.info(f"Unseen Fall Recall (Sens): {test_stats['sensitivity']*100:.2f}% (Rate of detecting real falls in a new room)")
+    logger.info(f"Unseen Specificity      : {test_stats['specificity']*100:.2f}% (Rate of avoiding false alarms)")
+    logger.info("-" * 50)
+    logger.info("CONFUSION MATRIX ON UNSEEN ROOM:")
+    logger.info(f"  * True Positive  (TP) : {test_metrics.tp:>2} video(s) -> Fall correctly detected")
+    logger.info(f"  * False Negative (FN) : {test_metrics.fn:>2} video(s) -> Fall MISSED (Dangerous!)")
+    logger.info(f"  * True Negative  (TN) : {test_metrics.tn:>2} video(s) -> Normal action correctly classified")
+    logger.info(f"  * False Positive (FP) : {test_metrics.fp:>2} video(s) -> False Alarm")
+    logger.info("=" * 50)
+    logger.info(f"Best model saved at: {best_model_path}")
+    logger.info("Training and evaluation completed successfully!")
+
 
 if __name__ == "__main__":
     main()
