@@ -41,7 +41,7 @@ for root, dirs, files in os.walk(RAW_INPUT_DIR):
             alt_annotation_path = os.path.join(os.path.dirname(root), "Annotation_files", raw_video_name + ".txt")                                                               
                                                                                                                                                                                     
             is_fall = False                                                                                                                                                      
-            if (os.path.exists(annotation_path) and os.path.getsize(annotation_path) > 0) or \                                                                                   
+            if (os.path.exists(annotation_path) and os.path.getsize(annotation_path) > 0) or                                                                                   
                 (os.path.exists(alt_annotation_path) and os.path.getsize(alt_annotation_path) > 0):                                                                               
                 is_fall = True                                                                                                                                                   
                                                                                                                                                                                     
